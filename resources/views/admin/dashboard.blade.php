@@ -36,6 +36,13 @@
         padding: 20px;
         margin-bottom: 20px;
         box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        height: 350px; /* Fixed height for the card */
+    }
+    .chart-container {
+        position: relative;
+        height: 250px; /* Fixed height for the chart container */
+        width: 100%;
+        margin-top: 15px;
     }
 </style>
 @endpush
@@ -81,17 +88,22 @@
         <div class="col-md-6">
             <div class="chart-card">
                 <h5><i class="fas fa-chart-line"></i> User Growth (Last 30 Days)</h5>
-                <canvas id="userGrowthChart" height="200"></canvas>
+                <div class="chart-container">
+                    <canvas id="userGrowthChart"></canvas>
+                </div>
             </div>
         </div>
         <div class="col-md-6">
             <div class="chart-card">
                 <h5><i class="fas fa-chart-pie"></i> Top Species</h5>
-                <canvas id="topSpeciesChart" height="200"></canvas>
+                <div class="chart-container">
+                    <canvas id="topSpeciesChart"></canvas>
+                </div>
             </div>
         </div>
     </div>
 
+    <!-- Rest of your content remains the same -->
     <!-- Recent Users and Identifications -->
     <div class="row">
         <div class="col-md-6">
@@ -245,6 +257,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 data: {!! json_encode($userGrowth->pluck('count')) !!},
                 borderColor: '#28a745',
                 backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                borderWidth: 2,
+                pointBackgroundColor: '#28a745',
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2,
+                pointRadius: 4,
+                pointHoverRadius: 6,
                 tension: 0.4,
                 fill: true
             }]
@@ -255,6 +273,30 @@ document.addEventListener('DOMContentLoaded', function() {
             plugins: {
                 legend: {
                     display: false
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    backgroundColor: 'rgba(0,0,0,0.8)',
+                    titleColor: '#fff',
+                    bodyColor: '#fff'
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1,
+                        precision: 0
+                    },
+                    grid: {
+                        color: 'rgba(0,0,0,0.05)'
+                    }
+                },
+                x: {
+                    grid: {
+                        display: false
+                    }
                 }
             }
         }
@@ -277,7 +319,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     '#fd7e14',
                     '#6f42c1',
                     '#e83e8c'
-                ]
+                ],
+                borderWidth: 2,
+                borderColor: '#fff',
+                hoverOffset: 10
             }]
         },
         options: {
@@ -285,9 +330,31 @@ document.addEventListener('DOMContentLoaded', function() {
             maintainAspectRatio: false,
             plugins: {
                 legend: {
-                    position: 'bottom'
+                    position: 'bottom',
+                    labels: {
+                        boxWidth: 12,
+                        padding: 15,
+                        font: {
+                            size: 11
+                        }
+                    }
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(0,0,0,0.8)',
+                    titleColor: '#fff',
+                    bodyColor: '#fff',
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.label || '';
+                            const value = context.raw || 0;
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = ((value / total) * 100).toFixed(1);
+                            return `${label}: ${value} (${percentage}%)`;
+                        }
+                    }
                 }
-            }
+            },
+            cutout: '60%'
         }
     });
 });

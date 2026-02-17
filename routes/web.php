@@ -61,24 +61,42 @@ Route::middleware(['auth'])->group(function () {
     // History
     Route::get('/history', [HistoryController::class, 'index'])->name('history');
 
-    // Admin routes (require admin role)
-    Route::prefix('admin')->name('admin.')->middleware(['auth', 'admin'])->group(function () {
-        Route::get('/dashboard', [AdminController::class, 'dashboard'])->name('dashboard');
-        Route::get('/users', [AdminController::class, 'users'])->name('users');
-        Route::get('/statistics', [AdminController::class, 'statistics'])->name('statistics');
 
-        // Species management
-        Route::resource('species', \App\Http\Controllers\Admin\SpeciesController::class);
 
-        // Categories management
-        Route::resource('categories', \App\Http\Controllers\Admin\CategoryController::class);
-    });
+
+// Admin routes (require admin role)
+Route::prefix('admin')->name('admin.')->middleware(['auth', \App\Http\Middleware\AdminMiddleware::class])->group(function () {
+    Route::get('/dashboard', [App\Http\Controllers\Admin\AdminController::class, 'dashboard'])->name('dashboard');
+
+    // User Management
+    Route::get('/users', [App\Http\Controllers\Admin\AdminController::class, 'users'])->name('users');
+    Route::get('/users/create', [App\Http\Controllers\Admin\AdminController::class, 'createUser'])->name('users.create');
+    Route::post('/users', [App\Http\Controllers\Admin\AdminController::class, 'storeUser'])->name('users.store');
+    Route::get('/users/{user}', [App\Http\Controllers\Admin\AdminController::class, 'showUser'])->name('users.show');
+    Route::get('/users/{user}/edit', [App\Http\Controllers\Admin\AdminController::class, 'editUser'])->name('users.edit');
+    Route::put('/users/{user}', [App\Http\Controllers\Admin\AdminController::class, 'updateUser'])->name('users.update');
+    Route::delete('/users/{user}', [App\Http\Controllers\Admin\AdminController::class, 'destroyUser'])->name('users.destroy');
+
+    // Add these missing routes
+    Route::post('/users/{user}/verify-email', [App\Http\Controllers\Admin\AdminController::class, 'verifyEmail'])->name('users.verify-email');
+    Route::patch('/users/{user}/toggle-status', [App\Http\Controllers\Admin\AdminController::class, 'toggleUserStatus'])->name('users.toggle-status');
+    Route::put('/users/{user}/reset-password', [App\Http\Controllers\Admin\AdminController::class, 'resetPassword'])->name('users.reset-password');
+
+    Route::get('/statistics', [App\Http\Controllers\Admin\AdminController::class, 'statistics'])->name('statistics');
+
+    // Species management
+    Route::resource('species', App\Http\Controllers\Admin\SpeciesController::class);
+
+    // Categories management
+    Route::resource('categories', App\Http\Controllers\Admin\CategoryController::class);
 
     // Additional routes for species and categories
-Route::patch('/species/{species}/toggle-status', [SpeciesController::class, 'toggleStatus'])
-    ->name('species.toggle-status');
-Route::get('/species/export', [SpeciesController::class, 'export'])
-    ->name('species.export');
+    Route::patch('/species/{species}/toggle-status', [App\Http\Controllers\Admin\SpeciesController::class, 'toggleStatus'])
+        ->name('species.toggle-status');
+    Route::get('/species/export', [App\Http\Controllers\Admin\SpeciesController::class, 'export'])
+        ->name('species.export');
+});
+
 
     // Public species view (accessible to everyone)
 Route::get('/species/{species}', [App\Http\Controllers\SpeciesViewController::class, 'show'])
@@ -87,6 +105,5 @@ Route::get('/species/{species}', [App\Http\Controllers\SpeciesViewController::cl
 // API route for getting species by category
 Route::get('/categories/{category}/species', [CategoryController::class, 'getSpecies'])
     ->name('categories.species');
-
 
 });
