@@ -39,10 +39,17 @@ Route::post('/logout', [LoginController::class, 'logout'])->name('logout');
 Route::get('/register', [RegisterController::class, 'showRegistrationForm'])->name('register');
 Route::post('/register', [RegisterController::class, 'register']);
 
+
 // Protected routes (require authentication)
 Route::middleware(['auth'])->group(function () {
     // Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
+     // Profile routes
+    Route::get('/profile', [App\Http\Controllers\ProfileController::class, 'show'])->name('profile.show');
+    Route::get('/profile/edit', [App\Http\Controllers\ProfileController::class, 'edit'])->name('profile.edit');
+    Route::post('/profile/update', [App\Http\Controllers\ProfileController::class, 'update'])->name('profile.update');
+    Route::post('/profile/update-password', [App\Http\Controllers\ProfileController::class, 'updatePassword'])->name('profile.update-password');
 
     // Identification
     Route::get('/identify', [IdentificationController::class, 'index'])->name('identify');
@@ -72,6 +79,10 @@ Route::patch('/species/{species}/toggle-status', [SpeciesController::class, 'tog
     ->name('species.toggle-status');
 Route::get('/species/export', [SpeciesController::class, 'export'])
     ->name('species.export');
+
+    // Public species view (accessible to everyone)
+Route::get('/species/{species}', [App\Http\Controllers\SpeciesViewController::class, 'show'])
+    ->name('species.show');
 
 // API route for getting species by category
 Route::get('/categories/{category}/species', [CategoryController::class, 'getSpecies'])
