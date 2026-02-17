@@ -8,6 +8,7 @@ use App\Models\Species;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
+use Intervention\Image\ImageManager; // You'll need to install this package
 
 class IdentificationController extends Controller
 {
@@ -43,11 +44,45 @@ class IdentificationController extends Controller
 
         // Decode and save image
         $imageData = $request->image;
-        $imageData = str_replace('data:image/png;base64,', '', $imageData);
-        $imageData = str_replace(' ', '+', $imageData);
-        $imageName = 'identifications/' . Auth::id() . '/' . uniqid() . '.png';
 
-        Storage::disk('public')->put($imageName, base64_decode($imageData));
+        // Check if it's a data URL and extract the format
+        if (preg_match('/^data:image\/(\w+);base64,/', $imageData, $matches)) {
+            $imageType = $matches[1]; // jpeg, png, gif, etc.
+            $imageData = substr($imageData, strpos($imageData, ',') + 1);
+        } else {
+            $imageType = 'png'; // default
+        }
+
+        $imageData = str_replace(' ', '+', $imageData);
+        $imageData = base64_decode($imageData);
+
+        if ($imageData === false) {
+            return response()->json(['error' => 'Invalid image data'], 400);
+        }
+
+        // Create directory if it doesn't exist
+        $userDirectory = 'identifications/' . Auth::id();
+        $fullPath = storage_path('app/public/' . $userDirectory);
+
+        if (!file_exists($fullPath)) {
+            mkdir($fullPath, 0755, true);
+        }
+
+        // Generate unique filename with correct extension
+        $extension = $imageType === 'jpeg' ? 'jpg' : $imageType;
+        $filename = uniqid() . '.' . $extension;
+        $imageName = $userDirectory . '/' . $filename;
+
+        // Save the image
+        Storage::disk('public')->put($imageName, $imageData);
+
+        // Also save to public/storage for direct access
+        $publicPath = public_path('storage/' . $imageName);
+        $publicDir = dirname($publicPath);
+        if (!file_exists($publicDir)) {
+            mkdir($publicDir, 0755, true);
+        }
+        file_put_contents($publicPath, $imageData);
 
         $identification = Identification::create([
             'user_id' => Auth::id(),
@@ -62,7 +97,8 @@ class IdentificationController extends Controller
 
         return response()->json([
             'success' => true,
-            'identification' => $identification->load('species')
+            'identification' => $identification->load('species'),
+            'image_url' => $identification->image_url
         ]);
     }
 
