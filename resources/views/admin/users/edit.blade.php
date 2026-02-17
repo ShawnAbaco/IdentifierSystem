@@ -41,6 +41,20 @@
         border-radius: 10px;
         box-shadow: 0 2px 5px rgba(0,0,0,0.05);
     }
+    .otp-input {
+        width: 50px;
+        height: 60px;
+        font-size: 24px;
+        text-align: center;
+        border: 2px solid #dee2e6;
+        border-radius: 8px;
+        margin: 0 5px;
+    }
+    .otp-input:focus {
+        border-color: #28a745;
+        box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
+        outline: none;
+    }
 </style>
 @endpush
 
@@ -170,6 +184,7 @@
                     <h5><i class="fas fa-shield-alt"></i> Account Status</h5>
 
                     <div class="row">
+                        <!-- Updated Email Verification Section with OTP -->
                         <div class="col-md-6">
                             <div class="mb-3">
                                 <label class="form-label">Email Verification</label>
@@ -186,8 +201,8 @@
                                             <i class="fas fa-exclamation-triangle"></i> Not Verified
                                         </span>
                                         <button type="button" class="btn btn-sm btn-outline-warning mt-2"
-                                                onclick="verifyEmail({{ $user->id }})">
-                                            <i class="fas fa-envelope"></i> Verify Now
+                                                onclick="sendOtp({{ $user->id }})">
+                                            <i class="fas fa-envelope"></i> Send OTP
                                         </button>
                                     @endif
                                 </div>
@@ -248,35 +263,73 @@
     </form>
 </div>
 
-<!-- Verify Email Modal -->
-<div class="modal fade" id="verifyEmailModal" tabindex="-1">
+<!-- OTP Verification Modal -->
+<div class="modal fade" id="otpModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header bg-success text-white">
-                <h5 class="modal-title"><i class="fas fa-envelope"></i> Verify Email</h5>
+                <h5 class="modal-title"><i class="fas fa-key"></i> Email Verification</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <p>Send email verification to <strong>{{ $user->email }}</strong>?</p>
-                <p class="text-muted small">This will mark the email as verified immediately.</p>
+                <div id="otpMessage" class="alert alert-info" style="display: none;"></div>
+
+                <p>We've sent a 6-digit OTP to <strong id="userEmail">{{ $user->email }}</strong></p>
+                <p class="text-muted small">Please enter the OTP below to verify the email. The OTP is valid for 10 minutes.</p>
+
+                <div class="text-center mb-3">
+                    <div class="d-flex justify-content-center gap-2" id="otpInputs">
+                        <input type="text" class="form-control text-center otp-input" maxlength="1" inputmode="numeric">
+                        <input type="text" class="form-control text-center otp-input" maxlength="1" inputmode="numeric">
+                        <input type="text" class="form-control text-center otp-input" maxlength="1" inputmode="numeric">
+                        <input type="text" class="form-control text-center otp-input" maxlength="1" inputmode="numeric">
+                        <input type="text" class="form-control text-center otp-input" maxlength="1" inputmode="numeric">
+                        <input type="text" class="form-control text-center otp-input" maxlength="1" inputmode="numeric">
+                    </div>
+                </div>
+
+                <div class="text-center mt-3">
+                    <button type="button" class="btn btn-link" onclick="resendOtp({{ $user->id }})" id="resendBtn">
+                        Resend OTP
+                    </button>
+                    <span id="timer" class="text-muted ms-2"></span>
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <form action="{{ route('admin.users.verify-email', $user) }}" method="POST">
-                    @csrf
-                    <button type="submit" class="btn btn-success">
-                        <i class="fas fa-check-circle"></i> Verify Email
-                    </button>
-                </form>
+                <button type="button" class="btn btn-success" onclick="verifyOtp({{ $user->id }})" id="verifyBtn">
+                    <i class="fas fa-check-circle"></i> Verify Email
+                </button>
             </div>
         </div>
     </div>
 </div>
 
+<!-- Success Message Modal -->
+<div class="modal fade" id="successModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title"><i class="fas fa-check-circle"></i> Success</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="successMessage">
+                <!-- Success message will be displayed here -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
 @endsection
 
 @push('scripts')
 <script>
+// Global variables
+let otpModal;
+let countdownInterval;
+
 // Preview image before upload
 function previewImage(input) {
     if (input.files && input.files[0]) {
@@ -288,11 +341,191 @@ function previewImage(input) {
     }
 }
 
-// // Verify email
-// function verifyEmail(userId) {
-//     const verifyModal = new bootstrap.Modal(document.getElementById('verifyEmailModal'));
-//     verifyModal.show();
-// }
+// Send OTP function
+function sendOtp(userId) {
+    // Show loading
+    Swal.fire({
+        title: 'Sending OTP...',
+        text: 'Please wait',
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading()
+    });
+
+    fetch(`/admin/users/${userId}/send-otp`, {
+        method: 'POST',
+        headers: {
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+            'Accept': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        Swal.close();
+
+        if (data.success) {
+            // Show OTP modal
+            otpModal = new bootstrap.Modal(document.getElementById('otpModal'));
+            otpModal.show();
+
+            // Clear any existing inputs
+            document.querySelectorAll('.otp-input').forEach(input => input.value = '');
+
+            // Focus first input
+            document.querySelector('.otp-input').focus();
+
+            // Start countdown
+            startCountdown(600); // 10 minutes in seconds
+
+            // Show message
+            const messageDiv = document.getElementById('otpMessage');
+            messageDiv.className = 'alert alert-success';
+            messageDiv.innerHTML = '<i class="fas fa-check-circle"></i> ' + data.message;
+            messageDiv.style.display = 'block';
+        } else {
+            Swal.fire('Error', data.message, 'error');
+        }
+    })
+    .catch(error => {
+        Swal.close();
+        Swal.fire('Error', 'Failed to send OTP', 'error');
+        console.error('Error:', error);
+    });
+}
+
+// Verify OTP function
+function verifyOtp(userId) {
+    // Get OTP from inputs
+    const inputs = document.querySelectorAll('.otp-input');
+    let otp = '';
+    inputs.forEach(input => otp += input.value);
+
+    if (otp.length !== 6) {
+        Swal.fire('Error', 'Please enter complete 6-digit OTP', 'warning');
+        return;
+    }
+
+    // Show loading
+    Swal.fire({
+        title: 'Verifying...',
+        text: 'Please wait',
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading()
+    });
+
+    fetch(`/admin/users/${userId}/verify-otp`, {
+        method: 'POST',
+        headers: {
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        },
+        body: JSON.stringify({ otp: otp })
+    })
+    .then(response => response.json())
+    .then(data => {
+        Swal.close();
+
+        if (data.success) {
+            // Close modal
+            otpModal.hide();
+
+            // Show success message
+            Swal.fire({
+                icon: 'success',
+                title: 'Verified!',
+                text: data.message,
+                timer: 2000,
+                showConfirmButton: false
+            }).then(() => {
+                location.reload();
+            });
+        } else {
+            Swal.fire('Error', data.message, 'error');
+        }
+    })
+    .catch(error => {
+        Swal.close();
+        Swal.fire('Error', 'Verification failed', 'error');
+        console.error('Error:', error);
+    });
+}
+
+// Resend OTP function
+function resendOtp(userId) {
+    // Disable resend button
+    const resendBtn = document.getElementById('resendBtn');
+    resendBtn.disabled = true;
+
+    fetch(`/admin/users/${userId}/resend-otp`, {
+        method: 'POST',
+        headers: {
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+            'Accept': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Clear inputs
+            document.querySelectorAll('.otp-input').forEach(input => input.value = '');
+
+            // Show message
+            const messageDiv = document.getElementById('otpMessage');
+            messageDiv.className = 'alert alert-success';
+            messageDiv.innerHTML = '<i class="fas fa-check-circle"></i> ' + data.message;
+            messageDiv.style.display = 'block';
+
+            // Restart countdown
+            clearInterval(countdownInterval);
+            startCountdown(600);
+        } else {
+            Swal.fire('Error', data.message, 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        Swal.fire('Error', 'Failed to resend OTP', 'error');
+    })
+    .finally(() => {
+        setTimeout(() => {
+            resendBtn.disabled = false;
+        }, 60000); // Enable after 1 minute
+    });
+}
+
+// Start countdown timer
+function startCountdown(seconds) {
+    const timerDiv = document.getElementById('timer');
+
+    countdownInterval = setInterval(() => {
+        const minutes = Math.floor(seconds / 60);
+        const remainingSeconds = seconds % 60;
+
+        timerDiv.textContent = `(${minutes}:${remainingSeconds.toString().padStart(2, '0')})`;
+
+        if (seconds <= 0) {
+            clearInterval(countdownInterval);
+            timerDiv.textContent = '(Expired)';
+
+            // Show expired message
+            const messageDiv = document.getElementById('otpMessage');
+            messageDiv.className = 'alert alert-danger';
+            messageDiv.innerHTML = '<i class="fas fa-exclamation-circle"></i> OTP expired. Please request a new one.';
+            messageDiv.style.display = 'block';
+        }
+
+        seconds--;
+    }, 1000);
+}
+
+// Show success message from session
+@if(session('success'))
+    document.addEventListener('DOMContentLoaded', function() {
+        const successModal = new bootstrap.Modal(document.getElementById('successModal'));
+        document.getElementById('successMessage').innerHTML = "{{ session('success') }}";
+        successModal.show();
+    });
+@endif
 
 // Confirm before leaving if form is dirty
 let formChanged = false;
@@ -315,6 +548,30 @@ document.addEventListener('DOMContentLoaded', function() {
 
     form.addEventListener('submit', function() {
         formChanged = false;
+    });
+
+    // OTP input handling
+    const otpInputs = document.querySelectorAll('.otp-input');
+
+    otpInputs.forEach((input, index) => {
+        input.addEventListener('keyup', function(e) {
+            // Move to next input
+            if (this.value.length === 1 && index < otpInputs.length - 1) {
+                otpInputs[index + 1].focus();
+            }
+
+            // Handle backspace
+            if (e.key === 'Backspace' && index > 0 && this.value.length === 0) {
+                otpInputs[index - 1].focus();
+            }
+        });
+
+        // Allow only numbers
+        input.addEventListener('keypress', function(e) {
+            if (!/^\d$/.test(e.key)) {
+                e.preventDefault();
+            }
+        });
     });
 });
 

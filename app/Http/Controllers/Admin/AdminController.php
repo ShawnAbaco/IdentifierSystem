@@ -12,9 +12,102 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
+// Add this use statement at the top
+use App\Models\EmailVerification;
+use App\Helpers\MailHelper;
 
 class AdminController extends Controller
 {
+
+// Add these methods to your AdminController:
+
+/**
+ * Send OTP for email verification
+ */
+public function sendVerificationOtp(Request $request, User $user)
+{
+    try {
+        // Generate OTP
+        $verification = EmailVerification::generateForUser($user->id);
+
+        // Prepare email
+        $subject = 'Email Verification OTP - ' . env('APP_NAME');
+        $body = MailHelper::getOtpEmailBody($user->name, $verification->otp);
+
+        // Send email
+        $result = MailHelper::sendEmail(
+            $user->email,
+            $user->name,
+            $subject,
+            $body
+        );
+
+        if ($result['success']) {
+            // Store the OTP in session for verification
+            session(['verification_user_id' => $user->id]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'OTP sent successfully to ' . $user->email
+            ]);
+        } else {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to send OTP: ' . $result['message']
+            ], 500);
+        }
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Error: ' . $e->getMessage()
+        ], 500);
+    }
+}
+
+/**
+ * Verify OTP and mark email as verified
+ */
+public function verifyOtp(Request $request, User $user)
+{
+    $request->validate([
+        'otp' => 'required|string|size:6'
+    ]);
+
+    // Verify OTP
+    if (EmailVerification::verify($user->id, $request->otp)) {
+        // Mark email as verified
+        $user->email_verified_at = now();
+        $user->save();
+
+        // Send welcome email
+        $welcomeBody = MailHelper::getWelcomeEmailBody($user->name);
+        MailHelper::sendEmail(
+            $user->email,
+            $user->name,
+            'Welcome to ' . env('APP_NAME'),
+            $welcomeBody
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Email verified successfully!'
+        ]);
+    }
+
+    return response()->json([
+        'success' => false,
+        'message' => 'Invalid or expired OTP'
+    ], 400);
+}
+
+/**
+ * Resend OTP
+ */
+public function resendOtp(Request $request, User $user)
+{
+    return $this->sendVerificationOtp($request, $user);
+}
+
 
   public function __construct()
     {

@@ -10,6 +10,29 @@ use App\Http\Controllers\HistoryController;
 use App\Http\Controllers\Admin\AdminController;
 use App\Http\Controllers\Admin\CategoryController;
 use App\Http\Controllers\Admin\SpeciesController;
+
+
+Route::get('/test-email', function() {
+    $user = App\Models\User::first();
+
+    $verification = App\Models\EmailVerification::generateForUser($user->id);
+    $body = App\Helpers\MailHelper::getOtpEmailBody($user->name, $verification->otp);
+
+    $result = App\Helpers\MailHelper::sendEmail(
+        $user->email,
+        $user->name,
+        'Test Email',
+        $body
+    );
+
+    if ($result['success']) {
+        return "Email sent successfully to {$user->email}! Check your inbox.";
+    } else {
+        return "Failed: " . $result['message'];
+    }
+})->middleware('auth');
+
+
 // Route::get('/', function () {
 //     return view('welcome');
 // });
@@ -76,6 +99,11 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', \App\Http\Middleware
     Route::get('/users/{user}/edit', [App\Http\Controllers\Admin\AdminController::class, 'editUser'])->name('users.edit');
     Route::put('/users/{user}', [App\Http\Controllers\Admin\AdminController::class, 'updateUser'])->name('users.update');
     Route::delete('/users/{user}', [App\Http\Controllers\Admin\AdminController::class, 'destroyUser'])->name('users.destroy');
+
+// OTP Verification routes
+Route::post('/users/{user}/send-otp', [AdminController::class, 'sendVerificationOtp'])->name('users.send-otp');
+Route::post('/users/{user}/verify-otp', [AdminController::class, 'verifyOtp'])->name('users.verify-otp');
+Route::post('/users/{user}/resend-otp', [AdminController::class, 'resendOtp'])->name('users.resend-otp');
 
     // Add these missing routes
     Route::post('/users/{user}/verify-email', [App\Http\Controllers\Admin\AdminController::class, 'verifyEmail'])->name('users.verify-email');
