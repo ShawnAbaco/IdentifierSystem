@@ -17,6 +17,10 @@
         padding: 20px;
         margin-bottom: 20px;
         border-left: 4px solid #28a745;
+        transition: all 0.3s;
+    }
+    .filter-card:hover {
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
     }
     .status-badge {
         padding: 5px 10px;
@@ -40,6 +44,32 @@
         padding: 5px 10px;
         margin: 0 2px;
         border-radius: 5px;
+        transition: all 0.2s;
+    }
+    .action-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+    .filter-badge {
+        background: #28a745;
+        color: white;
+        padding: 3px 8px;
+        border-radius: 15px;
+        font-size: 0.8rem;
+        margin-left: 5px;
+    }
+    .clear-filters {
+        color: #dc3545;
+        cursor: pointer;
+        text-decoration: none;
+        font-size: 0.9rem;
+    }
+    .clear-filters:hover {
+        text-decoration: underline;
+    }
+    .pagination-info {
+        color: #6c757d;
+        font-size: 0.9rem;
     }
 </style>
 @endpush
@@ -59,14 +89,27 @@
 
     <!-- Filter Section -->
     <div class="filter-card">
-        <form method="GET" action="{{ route('admin.users') }}" class="row g-3">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="mb-0"><i class="fas fa-filter"></i> Filter Users</h5>
+            @if(request()->anyFilled(['search', 'role', 'sort', 'date']))
+                <span class="filter-badge">
+                    <i class="fas fa-filter"></i> Filters Applied
+                </span>
+            @endif
+        </div>
+
+        <form method="GET" action="{{ route('admin.users') }}" class="row g-3" id="filterForm">
             <div class="col-md-3">
-                <label for="search" class="form-label">Search</label>
+                <label for="search" class="form-label">
+                    <i class="fas fa-search"></i> Search
+                </label>
                 <input type="text" class="form-control" id="search" name="search"
                        placeholder="Name or email..." value="{{ request('search') }}">
             </div>
             <div class="col-md-2">
-                <label for="role" class="form-label">Role</label>
+                <label for="role" class="form-label">
+                    <i class="fas fa-user-tag"></i> Role
+                </label>
                 <select class="form-select" id="role" name="role">
                     <option value="">All Roles</option>
                     <option value="admin" {{ request('role') == 'admin' ? 'selected' : '' }}>Admin</option>
@@ -74,24 +117,77 @@
                 </select>
             </div>
             <div class="col-md-2">
-                <label for="sort" class="form-label">Sort By</label>
+                <label for="sort" class="form-label">
+                    <i class="fas fa-sort"></i> Sort By
+                </label>
                 <select class="form-select" id="sort" name="sort">
                     <option value="latest" {{ request('sort') == 'latest' ? 'selected' : '' }}>Latest</option>
                     <option value="oldest" {{ request('sort') == 'oldest' ? 'selected' : '' }}>Oldest</option>
-                    <option value="name" {{ request('sort') == 'name' ? 'selected' : '' }}>Name</option>
+                    <option value="name" {{ request('sort') == 'name' ? 'selected' : '' }}>Name A-Z</option>
+                    <option value="name_desc" {{ request('sort') == 'name_desc' ? 'selected' : '' }}>Name Z-A</option>
                     <option value="identifications" {{ request('sort') == 'identifications' ? 'selected' : '' }}>Most IDs</option>
+                    <option value="identifications_desc" {{ request('sort') == 'identifications_desc' ? 'selected' : '' }}>Least IDs</option>
                 </select>
             </div>
             <div class="col-md-3">
-                <label for="date" class="form-label">Joined Date</label>
+                <label for="date" class="form-label">
+                    <i class="fas fa-calendar"></i> Joined Date
+                </label>
                 <input type="date" class="form-control" id="date" name="date" value="{{ request('date') }}">
             </div>
             <div class="col-md-2 d-flex align-items-end">
-                <button type="submit" class="btn btn-primary w-100">
+                <button type="submit" class="btn btn-primary w-100" id="applyFilter">
                     <i class="fas fa-filter"></i> Apply
                 </button>
             </div>
         </form>
+
+        <!-- Active Filters Display -->
+        @if(request()->anyFilled(['search', 'role', 'sort', 'date']))
+            <div class="mt-3 pt-2 border-top">
+                <div class="d-flex align-items-center flex-wrap">
+                    <small class="text-muted me-2">Active filters:</small>
+                    @if(request('search'))
+                        <span class="badge bg-light text-dark me-2 mb-1 p-2">
+                            <i class="fas fa-search"></i> "{{ request('search') }}"
+                        </span>
+                    @endif
+                    @if(request('role'))
+                        <span class="badge bg-light text-dark me-2 mb-1 p-2">
+                            <i class="fas fa-user-tag"></i> {{ ucfirst(request('role')) }}
+                        </span>
+                    @endif
+                    @if(request('sort'))
+                        <span class="badge bg-light text-dark me-2 mb-1 p-2">
+                            <i class="fas fa-sort"></i> {{ str_replace('_', ' ', request('sort')) }}
+                        </span>
+                    @endif
+                    @if(request('date'))
+                        <span class="badge bg-light text-dark me-2 mb-1 p-2">
+                            <i class="fas fa-calendar"></i> {{ request('date') }}
+                        </span>
+                    @endif
+                    <a href="{{ route('admin.users') }}" class="clear-filters ms-2">
+                        <i class="fas fa-times-circle"></i> Clear all filters
+                    </a>
+                </div>
+            </div>
+        @endif
+    </div>
+
+    <!-- Results Summary -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div class="pagination-info">
+            Showing {{ $users->firstItem() ?? 0 }} to {{ $users->lastItem() ?? 0 }} of {{ $users->total() }} users
+        </div>
+        <div class="btn-group btn-group-sm" role="group">
+            <button type="button" class="btn btn-outline-secondary" onclick="exportUsers()">
+                <i class="fas fa-download"></i> Export
+            </button>
+            <button type="button" class="btn btn-outline-secondary" onclick="refreshTable()">
+                <i class="fas fa-sync-alt"></i> Refresh
+            </button>
+        </div>
     </div>
 
     <!-- Users Table -->
@@ -128,7 +224,7 @@
                             </td>
                             <td>
                                 <span class="status-badge {{ $user->is_active ?? true ? 'active' : 'inactive' }}">
-                                    {{ $user->is_active ?? 'Active' }}
+                                    {{ isset($user->is_active) ? ($user->is_active ? 'Active' : 'Inactive') : 'Active' }}
                                 </span>
                             </td>
                             <td>
@@ -154,9 +250,17 @@
                         </tr>
                         @empty
                         <tr>
-                            <td colspan="9" class="text-center py-4">
-                                <i class="fas fa-users fa-3x text-muted mb-3"></i>
-                                <p class="text-muted">No users found</p>
+                            <td colspan="9" class="text-center py-5">
+                                <i class="fas fa-users fa-4x text-muted mb-3"></i>
+                                <h5 class="text-muted">No users found</h5>
+                                @if(request()->anyFilled(['search', 'role', 'sort', 'date']))
+                                    <p class="text-muted">Try adjusting your filters</p>
+                                    <a href="{{ route('admin.users') }}" class="btn btn-outline-success">
+                                        <i class="fas fa-times-circle"></i> Clear Filters
+                                    </a>
+                                @else
+                                    <p class="text-muted">Click "Add New User" to create one</p>
+                                @endif
                             </td>
                         </tr>
                         @endforelse
@@ -165,8 +269,16 @@
             </div>
 
             <!-- Pagination -->
-            <div class="d-flex justify-content-center mt-4">
-                {{ $users->appends(request()->query())->links() }}
+            <div class="d-flex justify-content-between align-items-center mt-4">
+                <div class="pagination-info">
+                    Page {{ $users->currentPage() }} of {{ $users->lastPage() }}
+                </div>
+                <div class="d-flex justify-content-center">
+                    {{ $users->appends(request()->query())->links() }}
+                </div>
+                <div class="pagination-info">
+                    Total: {{ $users->total() }} users
+                </div>
             </div>
         </div>
     </div>
@@ -174,7 +286,7 @@
 
 <!-- Add User Modal -->
 <div class="modal fade" id="addUserModal" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header bg-success text-white">
                 <h5 class="modal-title"><i class="fas fa-user-plus"></i> Add New User</h5>
@@ -183,38 +295,52 @@
             <div class="modal-body">
                 <form id="addUserForm" method="POST" action="{{ route('admin.users.store') }}" enctype="multipart/form-data">
                     @csrf
-                    <div class="mb-3">
-                        <label for="name" class="form-label">Name</label>
-                        <input type="text" class="form-control" id="name" name="name" required>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="name" class="form-label">Full Name *</label>
+                            <input type="text" class="form-control" id="name" name="name" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="email" class="form-label">Email Address *</label>
+                            <input type="email" class="form-control" id="email" name="email" required>
+                        </div>
                     </div>
-                    <div class="mb-3">
-                        <label for="email" class="form-label">Email</label>
-                        <input type="email" class="form-control" id="email" name="email" required>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="password" class="form-label">Password *</label>
+                            <input type="password" class="form-control" id="password" name="password" required minlength="8">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="password_confirmation" class="form-label">Confirm Password *</label>
+                            <input type="password" class="form-control" id="password_confirmation" name="password_confirmation" required>
+                        </div>
                     </div>
-                    <div class="mb-3">
-                        <label for="password" class="form-label">Password</label>
-                        <input type="password" class="form-control" id="password" name="password" required>
-                    </div>
-                    <div class="mb-3">
-                        <label for="role" class="form-label">Role</label>
-                        <select class="form-select" id="role" name="role" required>
-                            <option value="user">User</option>
-                            <option value="admin">Admin</option>
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label for="avatar" class="form-label">Avatar</label>
-                        <input type="file" class="form-control" id="avatar" name="avatar" accept="image/*">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="role" class="form-label">Role *</label>
+                            <select class="form-select" id="role" name="role" required>
+                                <option value="user">User</option>
+                                <option value="admin">Admin</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="avatar" class="form-label">Avatar</label>
+                            <input type="file" class="form-control" id="avatar" name="avatar" accept="image/*">
+                            <small class="text-muted">Max size: 2MB. Formats: JPG, PNG, GIF</small>
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label for="bio" class="form-label">Bio</label>
-                        <textarea class="form-control" id="bio" name="bio" rows="3"></textarea>
+                        <textarea class="form-control" id="bio" name="bio" rows="3" maxlength="500"></textarea>
+                        <small class="text-muted">Maximum 500 characters</small>
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="submit" form="addUserForm" class="btn btn-success">Add User</button>
+                <button type="submit" form="addUserForm" class="btn btn-success">
+                    <i class="fas fa-save"></i> Add User
+                </button>
             </div>
         </div>
     </div>
@@ -229,16 +355,66 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <p>Are you sure you want to delete this user? This action cannot be undone.</p>
-                <p class="text-danger"><strong>Note:</strong> All identifications made by this user will also be deleted.</p>
+                <div class="text-center mb-3">
+                    <i class="fas fa-user-times fa-4x text-danger"></i>
+                </div>
+                <p class="text-center">Are you sure you want to delete this user?</p>
+                <p class="text-center text-danger"><strong>This action cannot be undone.</strong></p>
+                <p class="text-center text-muted small">All identifications made by this user will also be deleted.</p>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                 <form id="deleteForm" method="POST">
                     @csrf
                     @method('DELETE')
-                    <button type="submit" class="btn btn-danger">Delete User</button>
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-trash"></i> Delete User
+                    </button>
                 </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Export Modal -->
+<div class="modal fade" id="exportModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title"><i class="fas fa-download"></i> Export Users</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Choose export format:</p>
+                <div class="d-grid gap-2">
+                    <button class="btn btn-outline-success" onclick="exportFormat('csv')">
+                        <i class="fas fa-file-csv"></i> Export as CSV
+                    </button>
+                    <button class="btn btn-outline-success" onclick="exportFormat('excel')">
+                        <i class="fas fa-file-excel"></i> Export as Excel
+                    </button>
+                    <button class="btn btn-outline-success" onclick="exportFormat('pdf')">
+                        <i class="fas fa-file-pdf"></i> Export as PDF
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Success Modal -->
+<div class="modal fade" id="successModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title"><i class="fas fa-check-circle"></i> Success</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="successMessage">
+                <!-- Success message will be displayed here -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
             </div>
         </div>
     </div>
@@ -266,12 +442,93 @@ function confirmDelete(userId) {
     deleteModal.show();
 }
 
-// Initialize tooltips
+// Export users
+function exportUsers() {
+    const exportModal = new bootstrap.Modal(document.getElementById('exportModal'));
+    exportModal.show();
+}
+
+function exportFormat(format) {
+    // Get current filter parameters
+    const search = document.getElementById('search').value;
+    const role = document.getElementById('role').value;
+    const sort = document.getElementById('sort').value;
+    const date = document.getElementById('date').value;
+
+    // Build URL with filters
+    let url = `/admin/users/export?format=${format}`;
+    if (search) url += `&search=${encodeURIComponent(search)}`;
+    if (role) url += `&role=${role}`;
+    if (sort) url += `&sort=${sort}`;
+    if (date) url += `&date=${date}`;
+
+    window.location.href = url;
+}
+
+// Refresh table
+function refreshTable() {
+    // Reload current page with same filters
+    window.location.reload();
+}
+
+// Auto-submit filters when select changes (optional)
 document.addEventListener('DOMContentLoaded', function() {
+    // Enable tooltips
     var tooltipTriggerList = [].slice.call(document.querySelectorAll('[title]'));
     var tooltipList = tooltipTriggerList.map(function(tooltipTriggerEl) {
         return new bootstrap.Tooltip(tooltipTriggerEl);
     });
+
+    // Auto-submit on select changes (optional - remove if you don't want this)
+    // const autoSubmit = false; // Set to true to enable auto-submit
+    // if (autoSubmit) {
+    //     document.getElementById('role').addEventListener('change', function() {
+    //         document.getElementById('filterForm').submit();
+    //     });
+    //     document.getElementById('sort').addEventListener('change', function() {
+    //         document.getElementById('filterForm').submit();
+    //     });
+    //     document.getElementById('date').addEventListener('change', function() {
+    //         document.getElementById('filterForm').submit();
+    //     });
+    // }
+
+    // Show success message from session
+    @if(session('success'))
+        const successModal = new bootstrap.Modal(document.getElementById('successModal'));
+        document.getElementById('successMessage').innerHTML = "{{ session('success') }}";
+        successModal.show();
+    @endif
 });
+
+// Debounce search input to prevent too many requests
+let searchTimeout;
+document.getElementById('search')?.addEventListener('input', function() {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+        // Uncomment to enable live search
+        // document.getElementById('filterForm').submit();
+    }, 500);
+});
+
+// Keyboard shortcut for search (Ctrl+F to focus search)
+document.addEventListener('keydown', function(e) {
+    if (e.ctrlKey && e.key === 'f') {
+        e.preventDefault();
+        document.getElementById('search').focus();
+    }
+});
+
+// Export to CSV function (can be expanded)
+function exportToCSV(users) {
+    // This would normally call a backend endpoint
+    console.log('Exporting to CSV...');
+}
+
+// Quick filter by role
+function filterByRole(role) {
+    document.getElementById('role').value = role;
+    document.getElementById('filterForm').submit();
+}
 </script>
 @endpush

@@ -22,7 +22,11 @@ class ProfileController extends Controller
     public function edit()
     {
         $user = Auth::user();
-        return view('profile.edit', compact('user'));
+        // Add these variables for the edit view
+        $recentIdentifications = $user->identifications()->with('species')->latest()->take(3)->get();
+        $totalIdentifications = $user->identifications()->count();
+
+        return view('profile.edit', compact('user', 'recentIdentifications', 'totalIdentifications'));
     }
 
     public function update(Request $request)

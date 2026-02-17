@@ -159,19 +159,61 @@ public function resendOtp(Request $request, User $user)
             'userGrowth'
         ));
     }
+public function users(Request $request)
+{
+    $query = User::withCount('identifications');
 
-    public function users()
-    {
-        $users = User::withCount('identifications')->paginate(15);
-        return view('admin.users', compact('users'));
+    // Apply search filter
+    if ($request->filled('search')) {
+        $search = $request->search;
+        $query->where(function($q) use ($search) {
+            $q->where('name', 'LIKE', "%{$search}%")
+              ->orWhere('email', 'LIKE', "%{$search}%");
+        });
     }
 
-    public function toggleUserStatus(User $user)
-    {
-        // You can implement soft deletes or status toggle
-        return back()->with('success', 'User status updated');
+    // Apply role filter
+    if ($request->filled('role')) {
+        $query->where('role', $request->role);
     }
 
+    // Apply date filter
+    if ($request->filled('date')) {
+        $query->whereDate('created_at', $request->date);
+    }
+
+    // Apply sorting
+    if ($request->filled('sort')) {
+        switch($request->sort) {
+            case 'latest':
+                $query->latest();
+                break;
+            case 'oldest':
+                $query->oldest();
+                break;
+            case 'name':
+                $query->orderBy('name', 'asc');
+                break;
+            case 'name_desc':
+                $query->orderBy('name', 'desc');
+                break;
+            case 'identifications':
+                $query->orderBy('identifications_count', 'desc');
+                break;
+            case 'identifications_desc':
+                $query->orderBy('identifications_count', 'asc');
+                break;
+            default:
+                $query->latest();
+        }
+    } else {
+        $query->latest(); // Default sorting
+    }
+
+    $users = $query->paginate(15)->withQueryString(); // withQueryString() preserves filters in pagination links
+
+    return view('admin.users', compact('users'));
+}
     public function statistics()
     {
         $stats = [
