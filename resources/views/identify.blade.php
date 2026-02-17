@@ -15,7 +15,7 @@
         align-items: center;
         justify-content: center;
     }
-    video, canvas {
+    video, canvas, #uploaded-image-preview {
         border: 2px solid #28a745;
         border-radius: 8px;
         max-width: 100%;
@@ -56,6 +56,39 @@
         font-size: 64px;
         margin-bottom: 15px;
     }
+    .upload-area {
+        border: 2px dashed #28a745;
+        border-radius: 8px;
+        padding: 30px;
+        text-align: center;
+        background: #f8f9fa;
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+    .upload-area:hover {
+        background: #e8f5e9;
+        border-color: #1e7e34;
+    }
+    .upload-area i {
+        font-size: 48px;
+        color: #28a745;
+        margin-bottom: 10px;
+    }
+    .mode-switch {
+        margin-bottom: 15px;
+    }
+    .mode-switch .btn {
+        border-radius: 20px;
+        padding: 8px 20px;
+    }
+    .mode-switch .btn.active {
+        background-color: #28a745;
+        color: white;
+        border-color: #28a745;
+    }
+    #save-button {
+        margin-left: 10px;
+    }
 </style>
 @endpush
 
@@ -86,8 +119,20 @@
                         @endforeach
                     </ul>
 
-                    <!-- Camera Controls -->
-                    <div class="mb-3">
+                    <!-- Mode Switch (Camera/Upload) -->
+                    <div class="mode-switch text-center">
+                        <div class="btn-group" role="group">
+                            <button type="button" class="btn btn-outline-success active" id="camera-mode-btn">
+                                <i class="fas fa-camera"></i> Camera Mode
+                            </button>
+                            <button type="button" class="btn btn-outline-success" id="upload-mode-btn">
+                                <i class="fas fa-upload"></i> Upload Photo
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Camera Controls (visible in camera mode) -->
+                    <div id="camera-controls" class="mb-3">
                         <button id="start-button" class="btn btn-success">
                             <i class="fas fa-video"></i> Start Camera
                         </button>
@@ -97,17 +142,35 @@
                         <button id="capture-button" class="btn btn-info" disabled>
                             <i class="fas fa-camera"></i> Capture Photo
                         </button>
+                        <!-- Save Button (hidden initially) -->
                         <button id="save-button" class="btn btn-warning" style="display: none;" data-bs-toggle="modal" data-bs-target="#saveModal">
                             <i class="fas fa-save"></i> Save Result
                         </button>
                     </div>
 
-                    <!-- Camera Container -->
+                    <!-- Upload Controls (visible in upload mode) -->
+                    <div id="upload-controls" class="mb-3" style="display: none;">
+                        <div class="upload-area" id="upload-area">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                            <h5>Click to upload or drag and drop</h5>
+                            <p class="text-muted">Supported formats: JPG, PNG, GIF (Max 10MB)</p>
+                            <input type="file" id="image-upload" accept="image/*" style="display: none;">
+                        </div>
+                        <button id="upload-predict-button" class="btn btn-primary mt-3" style="display: none;">
+                            <i class="fas fa-search"></i> Identify Uploaded Photo
+                        </button>
+                        <!-- Save Button for Upload Mode (hidden initially) -->
+                        <button id="upload-save-button" class="btn btn-warning mt-3" style="display: none;" data-bs-toggle="modal" data-bs-target="#saveModal">
+                            <i class="fas fa-save"></i> Save Result
+                        </button>
+                    </div>
+
+                    <!-- Camera/Image Container -->
                     <div id="webcam-container">
                         <div class="camera-placeholder">
                             <i class="fas fa-camera-retro"></i>
-                            <h5>Click "Start Camera" to begin</h5>
-                            <p class="text-muted">Make sure your camera is connected and you've granted permission</p>
+                            <h5>Choose mode to begin</h5>
+                            <p class="text-muted">Use camera or upload a photo to identify plants</p>
                         </div>
                     </div>
 
@@ -205,10 +268,10 @@
                 </div>
                 <div class="card-body">
                     <ol class="mb-0">
-                        <li class="mb-2">Click "Start Camera" to enable your webcam</li>
-                        <li class="mb-2">Position the plant/flower in the frame</li>
-                        <li class="mb-2">Click "Capture Photo" or "Identify" directly</li>
-                        <li class="mb-2">View the identification results</li>
+                        <li class="mb-2">Choose between Camera or Upload mode</li>
+                        <li class="mb-2">For Camera: Click "Start Camera" then capture/identify</li>
+                        <li class="mb-2">For Upload: Click upload area and select a photo</li>
+                        <li class="mb-2">Click "Identify" to analyze the image</li>
                         <li class="mb-2">Save results to your history with notes</li>
                         <li>Check the Quick Reference for species information</li>
                     </ol>
@@ -292,15 +355,171 @@ let currentPredictions = [];
 let currentImageData = null;
 let modelLoaded = false;
 let speciesData = @json($species);
+let currentMode = 'camera'; // 'camera' or 'upload'
+let uploadedImageFile = null;
 
 // Initialize event listeners
 document.addEventListener('DOMContentLoaded', function() {
+    // Mode buttons
+    document.getElementById('camera-mode-btn').addEventListener('click', () => switchMode('camera'));
+    document.getElementById('upload-mode-btn').addEventListener('click', () => switchMode('upload'));
+
+    // Camera controls
     document.getElementById('start-button').addEventListener('click', startCamera);
     document.getElementById('predict-button').addEventListener('click', predict);
     document.getElementById('capture-button').addEventListener('click', capturePhoto);
+
+    // Upload controls
+    const uploadArea = document.getElementById('upload-area');
+    const fileInput = document.getElementById('image-upload');
+
+    uploadArea.addEventListener('click', () => fileInput.click());
+    uploadArea.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadArea.style.background = '#e8f5e9';
+    });
+    uploadArea.addEventListener('dragleave', () => {
+        uploadArea.style.background = '#f8f9fa';
+    });
+    uploadArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadArea.style.background = '#f8f9fa';
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            handleImageUpload(files[0]);
+        }
+    });
+
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) {
+            handleImageUpload(e.target.files[0]);
+        }
+    });
+
+    document.getElementById('upload-predict-button').addEventListener('click', predictFromUpload);
+
     document.getElementById('confirm-save').addEventListener('click', saveIdentification);
     document.getElementById('search-species').addEventListener('keyup', searchSpecies);
 });
+
+// Switch between camera and upload mode
+function switchMode(mode) {
+    currentMode = mode;
+
+    // Update button states
+    document.getElementById('camera-mode-btn').classList.toggle('active', mode === 'camera');
+    document.getElementById('upload-mode-btn').classList.toggle('active', mode === 'upload');
+
+    // Show/hide controls
+    document.getElementById('camera-controls').style.display = mode === 'camera' ? 'block' : 'none';
+    document.getElementById('upload-controls').style.display = mode === 'upload' ? 'block' : 'none';
+
+    // Clear container
+    const container = document.getElementById('webcam-container');
+    if (mode === 'camera') {
+        container.innerHTML = `
+            <div class="camera-placeholder">
+                <i class="fas fa-camera-retro"></i>
+                <h5>Click "Start Camera" to begin</h5>
+                <p class="text-muted">Make sure your camera is connected and you've granted permission</p>
+            </div>
+        `;
+    } else {
+        container.innerHTML = `
+            <div class="camera-placeholder">
+                <i class="fas fa-cloud-upload-alt"></i>
+                <h5>Upload a photo to identify</h5>
+                <p class="text-muted">Click the upload area above to select an image</p>
+            </div>
+        `;
+    }
+
+    // Hide result section and save buttons
+    document.getElementById('result-section').style.display = 'none';
+    document.getElementById('save-button').style.display = 'none';
+    document.getElementById('upload-save-button').style.display = 'none';
+}
+
+// Handle image upload
+function handleImageUpload(file) {
+    // Validate file type
+    if (!file.type.match('image.*')) {
+        Swal.fire('Error', 'Please upload an image file', 'error');
+        return;
+    }
+
+    // Validate file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+        Swal.fire('Error', 'Image size should be less than 10MB', 'error');
+        return;
+    }
+
+    uploadedImageFile = file;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        currentImageData = e.target.result;
+
+        // Display preview
+        const container = document.getElementById('webcam-container');
+        container.innerHTML = `
+            <div class="position-relative">
+                <img id="uploaded-image-preview" src="${currentImageData}"
+                     style="max-width: 100%; max-height: 400px; border-radius: 8px;">
+                <button class="btn btn-sm btn-danger position-absolute top-0 end-0 m-2"
+                        onclick="removeUploadedImage()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        `;
+
+        // Show predict button
+        document.getElementById('upload-predict-button').style.display = 'block';
+        document.getElementById('upload-save-button').style.display = 'none';
+
+        // Load model if needed
+        loadModel();
+    };
+    reader.readAsDataURL(file);
+}
+
+// Remove uploaded image
+function removeUploadedImage() {
+    uploadedImageFile = null;
+    currentImageData = null;
+    document.getElementById('image-upload').value = '';
+    document.getElementById('upload-predict-button').style.display = 'none';
+    document.getElementById('upload-save-button').style.display = 'none';
+    document.getElementById('result-section').style.display = 'none';
+    document.getElementById('webcam-container').innerHTML = `
+        <div class="camera-placeholder">
+            <i class="fas fa-cloud-upload-alt"></i>
+            <h5>Upload a photo to identify</h5>
+            <p class="text-muted">Click the upload area above to select an image</p>
+        </div>
+    `;
+}
+
+// Load AI model
+async function loadModel() {
+    if (!modelLoaded) {
+        Swal.fire({
+            title: 'Loading AI Model',
+            text: 'Please wait...',
+            allowOutsideClick: false,
+            didOpen: () => Swal.showLoading()
+        });
+
+        try {
+            model = await tmImage.load('./model/model.json', './model/metadata.json');
+            modelLoaded = true;
+            Swal.close();
+        } catch (error) {
+            Swal.fire('Error', 'Failed to load AI model', 'error');
+            console.error('Model load error:', error);
+        }
+    }
+}
 
 // Camera functions
 async function startCamera() {
@@ -344,23 +563,7 @@ async function startCamera() {
         container.appendChild(video);
 
         // Load model if not loaded
-        if (!modelLoaded) {
-            Swal.fire({
-                title: 'Loading AI Model',
-                text: 'Please wait...',
-                allowOutsideClick: false,
-                didOpen: () => Swal.showLoading()
-            });
-
-            try {
-                model = await tmImage.load('./model/model.json', './model/metadata.json');
-                modelLoaded = true;
-                Swal.close();
-            } catch (error) {
-                Swal.fire('Error', 'Failed to load AI model', 'error');
-                console.error('Model load error:', error);
-            }
-        }
+        await loadModel();
 
         // Enable buttons
         predictBtn.disabled = false;
@@ -401,7 +604,11 @@ function capturePhoto() {
 }
 
 async function predict() {
-    if (!model || !video || !canvas) {
+    if (!model) {
+        await loadModel();
+    }
+
+    if (!video || !canvas) {
         Swal.fire('Warning', 'Please start the camera first!', 'warning');
         return;
     }
@@ -420,22 +627,72 @@ async function predict() {
 
         // Run prediction
         const predictions = await model.predict(canvas);
-        currentPredictions = predictions;
-
-        // Find best match
-        let best = predictions.reduce((max, p) => p.probability > max.probability ? p : max);
-
-        Swal.close();
-
-        // Display results
-        displayResults(best, predictions);
-
-        // Show save button
-        document.getElementById('save-button').style.display = 'inline-block';
+        processPredictions(predictions, 'camera');
 
     } catch (error) {
+        Swal.close();
         Swal.fire('Error', 'Prediction failed. Please try again.', 'error');
         console.error('Prediction error:', error);
+    }
+}
+
+async function predictFromUpload() {
+    if (!currentImageData) {
+        Swal.fire('Warning', 'Please upload an image first!', 'warning');
+        return;
+    }
+
+    await loadModel();
+
+    Swal.fire({
+        title: 'Analyzing...',
+        text: 'Please wait while AI identifies your plant',
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading()
+    });
+
+    try {
+        // Create an image element from the uploaded data
+        const img = new Image();
+        img.src = currentImageData;
+
+        img.onload = async function() {
+            // Create a canvas to process the image
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = 400;
+            tempCanvas.height = 300;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.drawImage(img, 0, 0, 400, 300);
+
+            // Run prediction
+            const predictions = await model.predict(tempCanvas);
+            processPredictions(predictions, 'upload');
+        };
+    } catch (error) {
+        Swal.close();
+        Swal.fire('Error', 'Prediction failed. Please try again.', 'error');
+        console.error('Prediction error:', error);
+    }
+}
+
+function processPredictions(predictions, mode) {
+    currentPredictions = predictions;
+
+    // Find best match
+    let best = predictions.reduce((max, p) => p.probability > max.probability ? p : max);
+
+    Swal.close();
+
+    // Display results
+    displayResults(best, predictions);
+
+    // Show appropriate save button based on mode
+    if (mode === 'camera') {
+        document.getElementById('save-button').style.display = 'inline-block';
+        document.getElementById('upload-save-button').style.display = 'none';
+    } else {
+        document.getElementById('upload-save-button').style.display = 'inline-block';
+        document.getElementById('save-button').style.display = 'none';
     }
 }
 
@@ -589,8 +846,9 @@ async function saveIdentification() {
     document.getElementById('confidence_display_text').textContent = (confidence * 100).toFixed(1) + '%';
     document.getElementById('image_data').value = currentImageData;
 
-    // Handle save
-    document.getElementById('confirm-save').onclick = async function() {
+    // Remove previous onclick handler and add new one
+    const confirmBtn = document.getElementById('confirm-save');
+    confirmBtn.onclick = async function() {
         const formData = new FormData(document.getElementById('saveForm'));
 
         try {
@@ -614,9 +872,11 @@ async function saveIdentification() {
                     showConfirmButton: false
                 });
                 document.getElementById('save-button').style.display = 'none';
+                document.getElementById('upload-save-button').style.display = 'none';
             }
         } catch (error) {
             Swal.fire('Error', 'Failed to save identification', 'error');
+            console.error('Save error:', error);
         }
     };
 }
