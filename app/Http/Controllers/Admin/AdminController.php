@@ -9,9 +9,121 @@ use App\Models\Identification;
 use App\Models\Species;
 use App\Models\Category;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
+// Add this use statement at the top
+use App\Models\EmailVerification;
+use App\Helpers\MailHelper;
 
 class AdminController extends Controller
 {
+
+// Add these methods to your AdminController:
+
+/**
+ * Send OTP for email verification
+ */
+public function sendVerificationOtp(Request $request, User $user)
+{
+    try {
+        // Generate OTP
+        $verification = EmailVerification::generateForUser($user->id);
+
+        // Prepare email
+        $subject = 'Email Verification OTP - ' . env('APP_NAME');
+        $body = MailHelper::getOtpEmailBody($user->name, $verification->otp);
+
+        // Send email
+        $result = MailHelper::sendEmail(
+            $user->email,
+            $user->name,
+            $subject,
+            $body
+        );
+
+        if ($result['success']) {
+            // Store the OTP in session for verification
+            session(['verification_user_id' => $user->id]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'OTP sent successfully to ' . $user->email
+            ]);
+        } else {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to send OTP: ' . $result['message']
+            ], 500);
+        }
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Error: ' . $e->getMessage()
+        ], 500);
+    }
+}
+
+/**
+ * Verify OTP and mark email as verified
+ */
+public function verifyOtp(Request $request, User $user)
+{
+    $request->validate([
+        'otp' => 'required|string|size:6'
+    ]);
+
+    // Verify OTP
+    if (EmailVerification::verify($user->id, $request->otp)) {
+        // Mark email as verified
+        $user->email_verified_at = now();
+        $user->save();
+
+        // Send welcome email
+        $welcomeBody = MailHelper::getWelcomeEmailBody($user->name);
+        MailHelper::sendEmail(
+            $user->email,
+            $user->name,
+            'Welcome to ' . env('APP_NAME'),
+            $welcomeBody
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Email verified successfully!'
+        ]);
+    }
+
+    return response()->json([
+        'success' => false,
+        'message' => 'Invalid or expired OTP'
+    ], 400);
+}
+
+/**
+ * Resend OTP
+ */
+public function resendOtp(Request $request, User $user)
+{
+    return $this->sendVerificationOtp($request, $user);
+}
+
+
+  public function __construct()
+    {
+        // This ensures admin check even if route middleware fails
+        $this->middleware(function ($request, $next) {
+            if (!Auth::check()) {
+                return redirect()->route('login');
+            }
+
+            if (!Auth::user()->isAdmin()) {
+                abort(403, 'Unauthorized access. Admin only.');
+            }
+
+            return $next($request);
+        });
+    }
     public function dashboard()
     {
         $totalUsers = User::count();
@@ -76,4 +188,124 @@ class AdminController extends Controller
 
         return view('admin.statistics', compact('stats'));
     }
+
+    // Add these methods to your AdminController
+
+public function showUser(User $user)
+{
+    $user->load('identifications.species');
+    $recentIdentifications = $user->identifications()->with('species')->latest()->take(10)->get();
+
+    return view('admin.users.show', compact('user', 'recentIdentifications'));
+}
+
+
+public function createUser()
+{
+    return view('admin.users.create');
+}
+
+/**
+ * Verify user email
+ */
+public function verifyEmail(Request $request, User $user)
+{
+    // Mark email as verified
+    $user->email_verified_at = now();
+    $user->save();
+
+    return back()->with('success', 'Email verified successfully for ' . $user->name);
+}
+
+/**
+ * Reset user password
+ */
+public function resetPassword(Request $request, User $user)
+{
+    $request->validate([
+        'password' => 'required|string|min:8|confirmed',
+    ]);
+
+    $user->password = Hash::make($request->password);
+    $user->save();
+
+    return back()->with('success', 'Password reset successfully for ' . $user->name);
+}
+
+
+
+
+public function editUser(User $user)
+{
+    return view('admin.users.edit', compact('user'));
+}
+
+public function updateUser(Request $request, User $user)
+{
+    $request->validate([
+        'name' => 'required|string|max:255',
+        'email' => 'required|string|email|max:255|unique:users,email,' . $user->id,
+        'role' => 'required|in:user,admin',
+        'bio' => 'nullable|string|max:500',
+        'avatar' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048'
+    ]);
+
+    $user->name = $request->name;
+    $user->email = $request->email;
+    $user->role = $request->role;
+    $user->bio = $request->bio;
+
+    if ($request->hasFile('avatar')) {
+        if ($user->avatar) {
+            Storage::disk('public')->delete($user->avatar);
+        }
+        $path = $request->file('avatar')->store('avatars', 'public');
+        $user->avatar = $path;
+    }
+
+    $user->save();
+
+    return redirect()->route('admin.users')->with('success', 'User updated successfully.');
+}
+
+public function destroyUser(User $user)
+{
+    // Delete user's avatar
+    if ($user->avatar) {
+        Storage::disk('public')->delete($user->avatar);
+    }
+
+    // Delete user's identifications (cascade will handle this if set in migration)
+    $user->delete();
+
+    return redirect()->route('admin.users')->with('success', 'User deleted successfully.');
+}
+
+public function storeUser(Request $request)
+{
+    $request->validate([
+        'name' => 'required|string|max:255',
+        'email' => 'required|string|email|max:255|unique:users',
+        'password' => 'required|string|min:8',
+        'role' => 'required|in:user,admin',
+        'bio' => 'nullable|string|max:500',
+        'avatar' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048'
+    ]);
+
+    $user = new User();
+    $user->name = $request->name;
+    $user->email = $request->email;
+    $user->password = Hash::make($request->password);
+    $user->role = $request->role;
+    $user->bio = $request->bio;
+
+    if ($request->hasFile('avatar')) {
+        $path = $request->file('avatar')->store('avatars', 'public');
+        $user->avatar = $path;
+    }
+
+    $user->save();
+
+    return redirect()->route('admin.users')->with('success', 'User created successfully.');
+}
 }
