@@ -398,7 +398,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
     document.getElementById('upload-predict-button').addEventListener('click', predictFromUpload);
 
+    // Save button event listeners
+    document.getElementById('save-button').addEventListener('click', prepareSaveModal);
+    document.getElementById('upload-save-button').addEventListener('click', prepareSaveModal);
     document.getElementById('confirm-save').addEventListener('click', saveIdentification);
+
     document.getElementById('search-species').addEventListener('keyup', searchSpecies);
 });
 
@@ -836,8 +840,8 @@ function searchSpecies() {
     });
 }
 
-async function saveIdentification() {
-    // Prepare save modal
+// Prepare the save modal with current data
+function prepareSaveModal() {
     const identifiedAs = document.getElementById('identified_as').value;
     const confidence = parseFloat(document.getElementById('confidence').value);
 
@@ -845,40 +849,70 @@ async function saveIdentification() {
     document.getElementById('confidence_display_bar').style.width = (confidence * 100) + '%';
     document.getElementById('confidence_display_text').textContent = (confidence * 100).toFixed(1) + '%';
     document.getElementById('image_data').value = currentImageData;
+}
 
-    // Remove previous onclick handler and add new one
-    const confirmBtn = document.getElementById('confirm-save');
-    confirmBtn.onclick = async function() {
-        const formData = new FormData(document.getElementById('saveForm'));
+// Save identification function
+async function saveIdentification() {
+    const formData = new FormData(document.getElementById('saveForm'));
 
-        try {
-            const response = await fetch('{{ route("identify.store") }}', {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
-                }
-            });
+    // Show loading
+    Swal.fire({
+        title: 'Saving...',
+        text: 'Please wait',
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading()
+    });
 
-            const result = await response.json();
-
-            if (result.success) {
-                $('#saveModal').modal('hide');
-                Swal.fire({
-                    icon: 'success',
-                    title: 'Saved!',
-                    text: 'Identification saved to your history',
-                    timer: 2000,
-                    showConfirmButton: false
-                });
-                document.getElementById('save-button').style.display = 'none';
-                document.getElementById('upload-save-button').style.display = 'none';
+    try {
+        const response = await fetch('{{ route("identify.store") }}', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                'Accept': 'application/json'
             }
-        } catch (error) {
-            Swal.fire('Error', 'Failed to save identification', 'error');
-            console.error('Save error:', error);
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
         }
-    };
+
+        const result = await response.json();
+
+        if (result.success) {
+            // Hide modal using Bootstrap 5 API instead of jQuery
+            const saveModal = bootstrap.Modal.getInstance(document.getElementById('saveModal'));
+            if (saveModal) {
+                saveModal.hide();
+            } else {
+                // Fallback if instance doesn't exist
+                document.getElementById('saveModal').classList.remove('show');
+                document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
+                document.body.classList.remove('modal-open');
+                document.body.style.overflow = '';
+                document.body.style.paddingRight = '';
+            }
+
+            Swal.fire({
+                icon: 'success',
+                title: 'Saved!',
+                text: 'Identification saved to your history',
+                timer: 2000,
+                showConfirmButton: false
+            });
+            document.getElementById('save-button').style.display = 'none';
+            document.getElementById('upload-save-button').style.display = 'none';
+        } else {
+            throw new Error('Server returned error');
+        }
+    } catch (error) {
+        console.error('Save error:', error);
+        Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'Failed to save identification: ' + error.message
+        });
+    }
 }
 
 // Clean up on page unload
