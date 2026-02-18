@@ -385,18 +385,48 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <p>Choose export format:</p>
-                <div class="d-grid gap-2">
-                    <button class="btn btn-outline-success" onclick="exportFormat('csv')">
-                        <i class="fas fa-file-csv"></i> Export as CSV
-                    </button>
-                    <button class="btn btn-outline-success" onclick="exportFormat('excel')">
-                        <i class="fas fa-file-excel"></i> Export as Excel
-                    </button>
-                    <button class="btn btn-outline-success" onclick="exportFormat('pdf')">
-                        <i class="fas fa-file-pdf"></i> Export as PDF
-                    </button>
+                <p class="text-muted mb-3">Choose export format. The file will open in a new tab.</p>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <div class="d-grid">
+                            <button class="btn btn-outline-success" onclick="exportFormat('csv')">
+                                <i class="fas fa-file-csv"></i> CSV
+                                <br>
+                                <small class="text-muted">Comma separated values</small>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="d-grid">
+                            <button class="btn btn-outline-success" onclick="exportFormat('excel')">
+                                <i class="fas fa-file-excel"></i> Excel
+                                <br>
+                                <small class="text-muted">XLSX format</small>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="d-grid">
+                            <button class="btn btn-outline-success" onclick="exportFormat('pdf')">
+                                <i class="fas fa-file-pdf"></i> PDF
+                                <br>
+                                <small class="text-muted">Document format</small>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="d-grid">
+                            <button class="btn btn-outline-success" onclick="exportFormat('docx')">
+                                <i class="fas fa-file-word"></i> DOCX
+                                <br>
+                                <small class="text-muted">Word document</small>
+                            </button>
+                        </div>
+                    </div>
                 </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
             </div>
         </div>
     </div>
@@ -422,7 +452,23 @@
 @endsection
 
 @push('scripts')
+
 <script>
+
+    // Handle export errors
+window.addEventListener('load', function() {
+    // Check for export error in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('export_error')) {
+        Swal.fire({
+            icon: 'error',
+            title: 'Export Failed',
+            text: decodeURIComponent(urlParams.get('export_error'))
+        });
+    }
+});
+
+
 // View user details
 function viewUser(userId) {
     window.location.href = `/admin/users/${userId}`;
@@ -462,7 +508,37 @@ function exportFormat(format) {
     if (sort) url += `&sort=${sort}`;
     if (date) url += `&date=${date}`;
 
-    window.location.href = url;
+    // Close modal
+    const exportModal = bootstrap.Modal.getInstance(document.getElementById('exportModal'));
+    exportModal.hide();
+
+    // Show loading message
+    Swal.fire({
+        title: 'Generating Export...',
+        text: 'Your file will open in a new tab.',
+        icon: 'info',
+        showConfirmButton: false,
+        allowOutsideClick: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+
+    // Open in new tab
+    window.open(url, '_blank');
+
+    // Close loading after 2 seconds
+    setTimeout(() => {
+        Swal.close();
+        // Show success message
+        Swal.fire({
+            icon: 'success',
+            title: 'Export Started',
+            text: 'Your file should open in a new tab.',
+            timer: 2000,
+            showConfirmButton: false
+        });
+    }, 2000);
 }
 
 // Refresh table

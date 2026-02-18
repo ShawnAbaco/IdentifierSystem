@@ -1,0 +1,176 @@
+{{-- resources/views/admin/exports/users-pdf.blade.php --}}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Users Export - {{ date('Y-m-d') }}</title>
+    <style>
+        body {
+            font-family: 'DejaVu Sans', sans-serif;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #28a745;
+        }
+        .header h1 {
+            color: #28a745;
+            margin: 0;
+            font-size: 24px;
+        }
+        .header p {
+            color: #666;
+            margin: 5px 0 0;
+        }
+        .summary {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 5px;
+        }
+        .summary table {
+            width: 100%;
+        }
+        .summary td {
+            padding: 5px;
+        }
+        .summary .label {
+            font-weight: bold;
+            width: 150px;
+        }
+        table.data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        table.data-table th {
+            background: #28a745;
+            color: white;
+            padding: 10px;
+            text-align: left;
+            font-size: 12px;
+        }
+        table.data-table td {
+            padding: 8px;
+            border-bottom: 1px solid #ddd;
+        }
+        table.data-table tr:nth-child(even) {
+            background: #f9f9f9;
+        }
+        .status-badge {
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+        .status-admin {
+            background: #cce5ff;
+            color: #004085;
+        }
+        .status-user {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status-active {
+            background: #d4edda;
+            color: #155724;
+        }
+        .footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+            text-align: center;
+            color: #666;
+            font-size: 10px;
+        }
+        .page-break {
+            page-break-after: always;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Users Export Report</h1>
+        <p>Generated on {{ date('F j, Y \a\t g:i A') }}</p>
+    </div>
+
+    <div class="summary">
+        <table>
+            <tr>
+                <td class="label">Total Users:</td>
+                <td>{{ $users->count() }}</td>
+                <td class="label">Export Format:</td>
+                <td>PDF</td>
+            </tr>
+            <tr>
+                <td class="label">Admins:</td>
+                <td>{{ $users->where('role', 'admin')->count() }}</td>
+                <td class="label">Regular Users:</td>
+                <td>{{ $users->where('role', 'user')->count() }}</td>
+            </tr>
+            @if(request('search'))
+            <tr>
+                <td class="label">Search Filter:</td>
+                <td colspan="3">"{{ request('search') }}"</td>
+            </tr>
+            @endif
+            @if(request('role'))
+            <tr>
+                <td class="label">Role Filter:</td>
+                <td colspan="3">{{ ucfirst(request('role')) }}</td>
+            </tr>
+            @endif
+        </table>
+    </div>
+
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Status</th>
+                <th>Identifications</th>
+                <th>Email Verified</th>
+                <th>Joined Date</th>
+            </tr>
+        </thead>
+        <tbody>
+            @forelse($users as $user)
+            <tr>
+                <td>{{ $user->id }}</td>
+                <td>{{ $user->name }}</td>
+                <td>{{ $user->email }}</td>
+                <td>
+                    <span class="status-badge status-{{ $user->role }}">
+                        {{ ucfirst($user->role) }}
+                    </span>
+                </td>
+                <td>
+                    <span class="status-badge status-active">
+                        {{ isset($user->is_active) ? ($user->is_active ? 'Active' : 'Inactive') : 'Active' }}
+                    </span>
+                </td>
+                <td>{{ $user->identifications_count ?? 0 }}</td>
+                <td>{{ $user->email_verified_at ? 'Yes' : 'No' }}</td>
+                <td>{{ $user->created_at->format('M d, Y') }}</td>
+            </tr>
+            @empty
+            <tr>
+                <td colspan="8" style="text-align: center; padding: 20px;">
+                    No users found matching the criteria.
+                </td>
+            </tr>
+            @endforelse
+        </tbody>
+    </table>
+
+    <div class="footer">
+        <p>Generated by {{ config('app.name') }} | {{ date('Y-m-d H:i:s') }}</p>
+    </div>
+</body>
+</html>
