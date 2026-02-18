@@ -54,6 +54,16 @@ Route::get('/', function () {
     return view('welcome');
 })->name('home');
 
+// Password Reset Routes
+Route::prefix('password')->name('password.')->group(function () {
+    Route::get('/forgot', [App\Http\Controllers\Auth\ForgotPasswordController::class, 'showLinkRequestForm'])->name('request');
+    Route::post('/email', [App\Http\Controllers\Auth\ForgotPasswordController::class, 'sendResetLinkEmail'])->name('email');
+    Route::get('/verify', [App\Http\Controllers\Auth\ForgotPasswordController::class, 'showOtpForm'])->name('verify.form');
+    Route::post('/verify', [App\Http\Controllers\Auth\ForgotPasswordController::class, 'verifyOtp'])->name('verify.otp');
+    Route::get('/reset', [App\Http\Controllers\Auth\ForgotPasswordController::class, 'showResetForm'])->name('reset.form');
+    Route::post('/reset', [App\Http\Controllers\Auth\ForgotPasswordController::class, 'reset'])->name('update');
+});
+
 // Authentication routes
 Route::get('/login', [LoginController::class, 'showLoginForm'])->name('login');
 Route::post('/login', [LoginController::class, 'login']);
@@ -61,6 +71,10 @@ Route::post('/logout', [LoginController::class, 'logout'])->name('logout');
 
 Route::get('/register', [RegisterController::class, 'showRegistrationForm'])->name('register');
 Route::post('/register', [RegisterController::class, 'register']);
+Route::post('/register/send-otp', [RegisterController::class, 'sendOtp'])->name('register.send-otp');
+Route::post('/register/verify-otp', [RegisterController::class, 'verifyOtp'])->name('register.verify-otp');
+Route::post('/register/resend-otp', [RegisterController::class, 'resendOtp'])->name('register.resend-otp');
+
 
 
 // Protected routes (require authentication)
